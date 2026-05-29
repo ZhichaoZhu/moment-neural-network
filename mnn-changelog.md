@@ -1,5 +1,5 @@
 # Release notes (mnn)
 
-## Version 1.0.2
+## Version 0.1.0
 
 First version ready to use.
