@@ -16,6 +16,7 @@ from mnn.mnn_core.torch_activation import mnn_activation_without_correlation
 from mnn.mnn_core.torch_core import MNNCore
 from mnn.mnn_core.torch_dawson import DawsonFirstOrder
 from mnn.mnn_core.torch_dawson import DawsonSecondOrder
+from mnn.mnn_core.nn.activation_torch import MomentActivation
 
 
 def _as_numpy(tensor):
@@ -281,6 +282,15 @@ class TorchActivationBenchmarkTest(unittest.TestCase):
         self.assertGreater(torch_time, 0.0)
         self._print_timing("activation_with_correlation", vanilla_time, torch_time, "cpu")
 
+        covariance = torch.eye(mean_trio.size(-1), dtype=torch.float64).unsqueeze(0) * std_trio.unsqueeze(-1) * std_trio.unsqueeze(-2)
+        moment_activation = MomentActivation()
+        torch_nn_time, torch_nn_output = _time_call(moment_activation, mean_trio, covariance, repeats=10)
+        expected_covariance = torch_output[2] * torch_output[1].unsqueeze(-1) * torch_output[1].unsqueeze(-2)
+        _assert_close(self, torch_output[0], torch_nn_output[0], atol=1e-6, rtol=1e-6)
+        _assert_close(self, expected_covariance, torch_nn_output[1], atol=1e-6, rtol=1e-6)
+        self.assertGreater(torch_nn_time, 0.0)
+        print(f"torch cpu nn.MomentActivation: {torch_nn_time:.6f}s/call")
+
     @unittest.skipUnless(torch.cuda.is_available(), "CUDA is not available")
     def test_gpu_torch_dawson_timing_against_vanilla_cpu(self):
         x_cpu = torch.linspace(-8.0, 8.0, 2048, dtype=torch.float64)
@@ -376,6 +386,16 @@ class TorchActivationBenchmarkTest(unittest.TestCase):
         self.assertGreater(vanilla_time, 0.0)
         self.assertGreater(torch_gpu_time, 0.0)
         self._print_timing("activation_with_correlation", vanilla_time, torch_gpu_time, "gpu")
+
+        covariance_gpu = torch.eye(mean_gpu.size(-1), dtype=torch.float64, device="cuda").unsqueeze(0)
+        covariance_gpu = covariance_gpu * std_gpu.unsqueeze(-1) * std_gpu.unsqueeze(-2)
+        moment_activation = MomentActivation()
+        torch_nn_time, torch_nn_output = _time_call(moment_activation, mean_gpu, covariance_gpu, repeats=10)
+        expected_covariance = torch_gpu_output[2] * torch_gpu_output[1].unsqueeze(-1) * torch_gpu_output[1].unsqueeze(-2)
+        _assert_close(self, torch_gpu_output[0], torch_nn_output[0], atol=1e-6, rtol=1e-6)
+        _assert_close(self, expected_covariance, torch_nn_output[1], atol=1e-6, rtol=1e-6)
+        self.assertGreater(torch_nn_time, 0.0)
+        print(f"torch gpu nn.MomentActivation: {torch_nn_time:.6f}s/call")
 
 
 if __name__ == "__main__":
